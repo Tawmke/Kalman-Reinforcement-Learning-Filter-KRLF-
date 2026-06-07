@@ -383,6 +383,7 @@ if __name__ == "__main__":
                     n_epochs = config['finetuning_settings']['n_epochs']
                     kf_coef = config['finetuning_settings']['kf_coef']
                     gae_lambda = config['finetuning_settings']['gae_lambda']
+                    initial_logstd = config['finetuning_settings']['initial_logstd']
 
                     # 新增微调数据记录文件夹
                     loger_folder = f'/Finetune_model/FT_lr={learning_rate:.2f}_nsteps={n_steps:.2f}_clip_range={clip_range:.2f}_kf={kf_coef:.2f}'
@@ -459,8 +460,8 @@ if __name__ == "__main__":
 
                     # 手动降低模型方差
                     with torch.no_grad():
-                        torch.nn.init.constant_(model.policy_Q.log_std, -3.0)
-                        torch.nn.init.constant_(model.policy_R.log_std, -3.0)
+                        torch.nn.init.constant_(model.policy_Q.log_std, initial_logstd)
+                        torch.nn.init.constant_(model.policy_R.log_std, initial_logstd)
 
                     print("-----Pre-training critic model start-----")
                     model.learn(total_timesteps=500, train_critic=True)

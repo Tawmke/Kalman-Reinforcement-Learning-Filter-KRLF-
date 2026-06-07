@@ -32,7 +32,7 @@ finetuning_settings:
   clip_range: 0.20686812900179555
   clip_range_vf: None
   n_epochs: 10 # 训练epoch
-  initial_logstd: -3
+  initial_logstd: -4
   gae_lambda: 0.90  # 推荐降到 0.90 或 0.85
   # 环境参数
   dt: 10 # 奖励计算时的间隔时长
