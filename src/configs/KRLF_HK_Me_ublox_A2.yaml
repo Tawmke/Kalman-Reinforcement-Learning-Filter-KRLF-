@@ -1,0 +1,102 @@
+# KRLF configuration file
+# 0604：替换最优参数：lr=0.0041_pos=6_SP=0.52_PC=0.0339_AP=0.1000_AW=0.20
+system:
+  gpu_id: "0"
+
+training_settings:
+  training_stepnum: 25000 # 30000
+  learning_rate: 0.0041
+  triptype: 'HK_Me_ublox_A2' # 训练类型: HK_De_ublox HK_Me_ublox HK_Ha_ublox
+  running_date: 'finetuning_4_testing_indomain_att_0407' # 设置保存路径 finetuning_4_testing_velatt_0407
+  networkmod: 'continuous_lstmATF1'
+  alltraj: True # use all traj data for training and testing
+  traj_record: False # 是否保存轨迹
+  repeat_train: '/mnt/sdb/home/tangjh/KF-GINS-Py-main/records_values/finetuning_4_testing_indomain_att_0407/HK_Me_ublox_A2_0.7_1_RMSEadv_ratio_InHiGNSSPos_CorrectCovPosAtt/lr=0.0004_pos=6_SP=0.25_PC=0.0786_AP=0.1000_AW=0.20/RecurrentPPO_1' # 重复实验
+  traj_type_target_train: [ 0, 0.7 ]  # 轨迹数据的比例
+  traj_type_target_test: [ 0.7, 1 ]
+
+testing_settings:
+  onlytesting: false # 只测试不训练
+  Twoagent_testing: false # 双智能体测试
+  testdate: 'finetuning_4_testing_indomain_att_0407'
+  model_basefolder: 'HK_Me_ublox_A2_0.7_1_RMSEadv_ratio_InHiGNSSPos_CorrectCovPosAtt'
+  model_name_list: []
+  # 双agent模型路径
+  MA_envmode: 'InHiGNSSSatCov_PreCovPos-PosAttCorrectCov'
+  test_triptype: [ 'HK_Me_ublox' ]
+  Dagent_file:
+    HK_Me_ublox:
+      agent_1_basefolder: 'HK_Me_ublox_0.7_1_RMSEadv_ratio'
+      agent_2_basefolder: 'HK_Me_ublox_A2_0.7_1_RMSEadv_ratio_InHiGNSSPos_CorrectCovPosAtt'
+      # 姿态最优：lr=0.00_pos=8_SP=0.06_PC=0.0047_AP=0.18_aw=0.09
+      # 定位最优：lr=0.00_pos=8_SP=0.06_PC=0.0047_AP=0.18_aw=0.09
+      agent_1_folder: 'lr=0.00_pos=8_SP=0.06_PC=0.0047_AP=0.18_aw=0.09'
+      # 姿态最优：lr=0.0004_pos=6_SP=0.21_PC=0.0750_AP=0.1000_AW=0.20
+      # 定位最优：lr=0.0003_pos=6_SP=0.76_PC=0.0891_AP=0.1000_AW=0.20
+      agent_2_folder: 'lr=0.0004_pos=6_SP=0.21_PC=0.0750_AP=0.1000_AW=0.20' # lr=0.0004_pos=6_SP=0.09_PC=0.0157_AP=0.1000_AW=0.20
+      Dual_agent_basefolder: 'HK_Me_ublox_RTK_InHiGNSSPos_PreCovPosAttCorrect_D-agent'
+
+  # 微调参数
+  kf_coef: 0.5
+
+env_para:
+#  envmode:
+#  1. InHiGNSSPos_CorrectCovPosAtt: 输入：新息 历史差分 GNSS 位置 协方差，输出：位置修正 姿态修正 位置姿态P修正
+#  2. InHiGNSSPos_CorrectCovPos: 输入：新息 历史差分 GNSS 位置 协方差，输出：位置修正 位置P修正
+  envmod: 'InHiGNSSPos_CorrectCovPosAtt'
+  conv_mode: 'Tuning' # Tuning Pred
+  trajdata_sort: 'sorted' # 是否乱序
+  postraj_num: 6 # 窗口步数
+  baseline_mod : 'GNSS/INS' # baseline方法 GNSS/INS GNSS
+  cord: 'NED' # LLH NED 动作操作的位置增量
+  RL_reset_step: 2
+  prdcov_mode: 'Scale_mode1' # Add_mode1 Add_mode2
+   # 连续动作设置（根据环境不一样，参数会不同）
+  continuous_actionspace: [-100,100]
+  continuous_scale_state_pred: 0.52 # 位置预测的动作尺度
+  continuous_scale_vel_pred: 1.0e-2 # 速度预测的动作尺度
+  continuous_scale_att_pred: 1.0e-1 # 姿态预测的动作尺度
+  continuous_scale_policy_cov: 0.0339 # RL协方差估计的动作尺度
+  # 初始化设置
+  initial_RLcov: 12.497609657871974
+  # 奖励设置： RMSEadv_tanh RMSEratio_log RMSEratio_tanh RMSEadv RMSEadv_log RMSEadv_ratio
+  reward_setting: 'RMSEadv_ratio'
+  pos_weight: 1
+  vel_weight: 0.2
+  att_weight: 0.2
+  # discrete action settings （基本不用）
+  discrete_actionspace: 7
+  action_scale: 3e-1 # scale in meters
+
+model_para:
+  networkmod: 'continuous_lstmATF1'
+  net_archppo: [64, 64]
+  ent_coef: 0 # 0.059612708084198295 # 策略熵损失，增加探索
+  vf_coef: 0.5 # 0.2167440119854488 # critic学不出来，可以调大
+  n_steps: 128 # reply buffer的大小, 增大可以提高稳定性，减小方差
+  batch_size: 128 # 每次训练取样本
+  clip_range: 0.2 # 0.0703096757712699
+  clip_range_vf: None
+  n_epochs: 10 # 训练epoch
+
+testing_dataset_setting:
+  'HK_MeDe_ublox': ['HK_Ha_ublox','HK_Tu_ublox']
+  'HK_DeHa_ublox': ['HK_Ha_ublox','HK_Tu_ublox'] # 不稳定
+  'HK_De': ['HK_De','HK_Me','HK_Ha','HK_Tu'] # 有效
+  'HK_Me': ['HK_Me','HK_De','HK_Ha','HK_Tu'] # 无效
+  'HK_Ha': ['HK_Ha','HK_Me','HK_De','HK_Tu'] # 无效
+  'HK_Me_ublox': ['HK_Me_ublox'] # 好像有点效果 ,'HK_Ha_ublox','HK_De_ublox'
+  'HK_Me_ublox_A2': ['HK_Me_ublox_A2','HK_De_ublox'] # 好像有点效果 ,'HK_Ha_ublox','HK_De_ublox'
+  'HK_De_ublox': ['HK_De_ublox'] # 很有效 ,'HK_Ha_ublox','HK_Me_ublox'
+  'HK_De_ublox_A2': ['HK_De_ublox'] # 很有效 ,'HK_Ha_ublox','HK_Me_ublox'
+  'HK_Ha_ublox': ['HK_Ha_ublox'] # ,'HK_Ha_ublox','HK_Me_ublox'
+  'HK_Me_phone': ['HK_Me_phone'] # 不稳定，可能某数据有问题
+  'HK_Me_ublox_f9p': ['HK_Me_ublox_f9p']
+
+#                    record_columns=['UnixTimeMillis_ref', ' Latitude (deg)', ' Longitude (deg)', ' Ellipsoid Height (m)',
+#                  ' Velocity X (m/s)', ' Velocity Y (m/s)', ' Velocity Z (m/s)',
+#                  ' Roll (deg)', ' Pitch (deg)', ' Heading (deg)',' Latitude_GT (deg)', ' Longitude_GT (deg)', ' Ellipsoid Height_GT (m)',
+#                  ' Velocity X_GT (m/s)', ' Velocity Y_GT (m/s)', ' Velocity Z_GT (m/s)',
+#                  ' Roll_GT (deg)', ' Pitch_GT (deg)', ' Heading_GT (deg)', 'Latitude_RLpredict', 'Longitude_RLpredict', 'Ellipsoid Height_RLpredict',
+#                  'Velocity_X_RLpredict', 'Velocity_Y_RLpredict', 'Velocity_Z_RLpredict',
+#                  'Roll_RLpredict', 'Pitch_RLpredict', 'Heading_RLpredict']

@@ -1,0 +1,93 @@
+# KRLF configuration file
+
+system:
+  gpu_id: "3"
+
+training_settings:
+  training_stepnum: 20000 # 30000
+  learning_rate: 0.0028196504805557345
+  triptype: 'HK_Ha_phone' # 训练类型: HK_De_ublox HK_Me_ublox HK_Ha_ublox
+# tuning_4_testing_indomain
+# finetuning_4_testing_indomain_att_0407
+  running_date: 'finetuning_4_testing_indomain_att_0407' # 设置保存路径 RL4ESKFIMU_halftest RL4ESKFIMU_alltraj
+  networkmod: 'continuous_lstmATF1'
+  alltraj: True # use all traj data for training and testing
+  traj_record: True # 是否保存轨迹
+  traj_type_target_train: [ 0, 0.7 ]  # 轨迹数据的比例
+  traj_type_target_test: [ 0.7, 1 ]
+
+testing_settings:
+  onlytesting: False # 只测试不训练
+  Twoagent_testing: False # 双智能体测试
+  testdate: 'tuning_4_testing_indomain'
+  model_basefolder: 'HK_Ha_ublox_0.7_1_RMSEadv_ratio_InHiGNSSPosAtt_PreCovPos'
+  model_name_list: ['lr=0.0028_pos=7_SP=2.49_PC=0.0016_Reset=1_IR=23.349129246018737']
+  # 微调参数
+  kf_coef: 0.5
+
+env_para:
+#  envmode:
+#  1. InHiGNSSSta_PreCovSta: 输入：新息 历史差分 GNSS 状态，输出：状态增量，协方差
+#  2. InHiGNSSPos_PreCovPos: 输入：新息 历史差分 GNSS 位置，输出：位置增量，协方差
+#  3. InHiGNSSPosAtt_PreCovPos: 输入：新息 历史差分 GNSS 位置，输出：位置姿态增量，协方差
+#  4. InHiGNSSStaCov_PrePosAttCov: 输入：新息 历史差分 GNSS PNT状态 协方差，输出：位置姿态增量，协方差
+  envmod: 'InHiGNSSStaCov_PrePosAttCov'
+  conv_mode: 'Tuning' # Tuning Pred
+  trajdata_sort: 'sorted' # 是否乱序
+  postraj_num: 7 # 窗口步数
+  baseline_mod : 'GNSS/INS' # baseline方法 GNSS/INS GNSS
+  cord: 'NED' # LLH NED 动作操作的位置增量
+  RL_reset_step: 1
+  prdcov_mode: 'Scale_mode1' # Add_mode1 Add_mode2 Scale_mode1
+  n_sigma: 3
+   # 连续动作设置（根据环境不一样，参数会不同）
+  continuous_actionspace: [-100,100]
+  continuous_scale_state_pred: 2.4927154228700066 # 状态预测的动作尺度
+  continuous_scale_vel_pred: 1.0e-2 # 速度预测的动作尺度
+  continuous_scale_att_pred: 1.0e-2 # 姿态预测的动作尺度
+  continuous_scale_policy_cov: 0.0015806653067164163 # RL协方差估计的动作尺度
+  # 初始化设置
+  initial_RLcov: 23.349129246018737
+  # 奖励设置： RMSEadv_tanh RMSEratio_log RMSEratio_tanh RMSEadv RMSEadv_log RMSEadv_ratio
+  reward_setting: 'RMSEadv_ratio'
+  pos_weight: 1
+  vel_weight: 0.2
+  att_weight: 0.3
+  h_scale: 0.01 # 高程方向位置预测尺度调整
+  # discrete action settings （基本不用）
+  discrete_actionspace: 7
+  action_scale: 3e-1 # scale in meters
+
+model_para:
+  networkmod: 'continuous_lstmATF1'
+  net_archppo: [64, 64]
+  ent_coef: 0.03715267354170137 # 策略熵损失，增加探索
+  vf_coef: 0.4047111560246948 # critic学不出来，可以调大
+  n_steps: 64 # reply buffer的大小, 增大可以提高稳定性，减小方差
+  batch_size: 64 # 每次训练取样本
+  clip_range: 0.21294166510977855
+  clip_range_vf: None
+  n_epochs: 10 # 训练epoch
+
+testing_dataset_setting:
+  'HK_MeDe_ublox': ['HK_Ha_ublox','HK_Tu_ublox']
+  'HK_DeHa_ublox': ['HK_Ha_ublox','HK_Tu_ublox'] # 不稳定
+  'HK_De': ['HK_De','HK_Me','HK_Ha','HK_Tu'] # 有效
+  'HK_Me': ['HK_Me','HK_De','HK_Ha','HK_Tu'] # 无效
+  'HK_Ha': ['HK_Ha','HK_Me','HK_De','HK_Tu'] # 无效
+  'HK_Me_ublox': ['HK_Me_ublox'] # 好像有点效果 ,'HK_Ha_ublox','HK_De_ublox'
+  'HK_De_ublox': ['HK_De_ublox'] # 很有效 ,'HK_Ha_ublox','HK_Me_ublox'
+  'HK_Ha_ublox': ['HK_Ha_ublox'] # ,'HK_Ha_ublox','HK_Me_ublox'
+  'HK_Ha_phone': ['HK_Ha_phone']
+  'HK_Me_phone': ['HK_Me_phone'] # 不稳定，可能某数据有问题
+  'HK_Me_ublox_f9p': ['HK_Me_ublox_f9p']
+  'HK_Ha_ublox_f9p': ['HK_Ha_ublox_f9p']
+
+
+#                    record_columns=['UnixTimeMillis_ref', ' Latitude (deg)', ' Longitude (deg)', ' Ellipsoid Height (m)',
+#                  ' Velocity X (m/s)', ' Velocity Y (m/s)', ' Velocity Z (m/s)',
+#                  ' Roll (deg)', ' Pitch (deg)', ' Heading (deg)',' Latitude_GT (deg)', ' Longitude_GT (deg)', ' Ellipsoid Height_GT (m)',
+#                  ' Velocity X_GT (m/s)', ' Velocity Y_GT (m/s)', ' Velocity Z_GT (m/s)',
+#                  ' Roll_GT (deg)', ' Pitch_GT (deg)', ' Heading_GT (deg)', 'Latitude_RLpredict', 'Longitude_RLpredict', 'Ellipsoid Height_RLpredict',
+#                  'Velocity_X_RLpredict', 'Velocity_Y_RLpredict', 'Velocity_Z_RLpredict',
+#                  'Roll_RLpredict', 'Pitch_RLpredict', 'Heading_RLpredict']

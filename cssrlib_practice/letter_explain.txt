@@ -1,0 +1,31 @@
+gnss.py文件
+uTYP:
+C = 1   # Code, 伪距
+L = 2   # 载波相位
+D = 3   # Doppler, 多普勒
+S = 4   # Signal Strength, 信号强度
+
+
+test_rtk.py文件
+sigs = [rSigRnx("GC1C"), rSigRnx("GC2W"),   # 第一个字符：系统标识；第二个字符：观测类型；
+        rSigRnx("EC1C"), rSigRnx("EC5Q"),   # 第三个字符：频带号；第四个字符：跟踪属性。
+        rSigRnx("GL1C"), rSigRnx("GL2W"), rSigRnx("GS1C"), rSigRnx("GS2W"),
+        rSigRnx("EL1C"), rSigRnx("EL5Q"), rSigRnx("ES1C"), rSigRnx("ES5Q")]
+        |
+        |
+        |
+       \ /
+sigs = [rSigRnx("GC1C"), rSigRnx("GL1C"), rSigRnx("GS1C"),
+        rSigRnx("GC2W"), rSigRnx("GL2W"), rSigRnx("GS2W"),
+        rSigRnx("EC1C"), rSigRnx("EL1C"), rSigRnx("ES1C"),
+        rSigRnx("EC5Q"), rSigRnx("EL5Q"), rSigRnx("ES5Q")]
+
+
+rinex.py文件
+obs.P = np.empty((0, self.nsig[uTYP.C]), dtype=np.float64)  # 伪距
+obs.L = np.empty((0, self.nsig[uTYP.L]), dtype=np.float64)  # 载波相位
+obs.D = np.empty((0, self.nsig[uTYP.D]), dtype=np.float64)  # 多普勒
+obs.S = np.empty((0, self.nsig[uTYP.S]), dtype=np.float64)  # 信噪比
+obs.lli = np.empty((0, self.nsig[uTYP.L]), dtype=np.int32)  # 失锁指示器
+obs.sat = np.empty(0, dtype=np.int32)  # 卫星编号
+

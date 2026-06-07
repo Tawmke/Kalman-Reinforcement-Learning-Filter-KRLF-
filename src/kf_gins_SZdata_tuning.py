@@ -1,0 +1,342 @@
+import os
+import sys
+import argparse
+import yaml
+import time
+import numpy as np
+cur_dir = os.path.dirname(os.path.abspath(__file__))
+src_dir = os.path.join(cur_dir, '..')
+sys.path.append(src_dir)
+
+from kfgins.kf_gins_types import GINSOptions
+from common.angle import Angle
+from common.types import IMU, GNSS
+from common.funcs_SZ import *
+from fileio.gnssfileloader_SZdata import GnssFileLoader
+from fileio.imufileloader_SZdata import ImuFileLoader
+from kfgins.gi_engine import GIEngine
+import optuna
+import optuna.visualization as vis
+
+"""
+可用香港UrbanNav数据集实现RTK/INS组合导航，该代码使用optuna搜索IMU参数
+创建人：唐健浩
+"""
+
+# 从配置文件中读取GIEngine相关的初始状态，并转换为标准单位
+# Load initial states of GIEngine from configuration file and convert them to standard units
+def loadConfig(config, options:GINSOptions):
+    # 读取初始位置(纬度 经度 高程)、(北向速度 东向速度 垂向速度)、姿态(欧拉角，ZYX旋转顺序, 横滚角、俯仰角、航向角)
+    # load initial position(latitude longitude altitude)
+    #              velocity(speeds in the directions of north, east and down)
+    #              attitude(euler angle, ZYX, roll, pitch and yaw)
+    vec1 = (np.array(config["initpos"])).astype(np.double) 
+    vec2 = (np.array(config["initvel"])).astype(np.double)
+    vec3 = (np.array(config["initatt"])).astype(np.double) # 没设置初始姿态要自己补偿
+
+    options.initstate.pos   = np.array([vec1[0], vec1[1], vec1[2]]) * Angle.D2R # 经纬度转弧度
+    options.initstate.vel   = np.array([vec2[0], vec2[1], vec2[2]])
+    options.initstate.euler = np.array([vec3[0], vec3[1], vec3[2]]) * Angle.D2R
+    options.initstate.pos[2] *= Angle.R2D # 高程不用
+
+    # 读取IMU误差初始值(零偏和比例因子)
+    # load initial imu error (bias and scale factor)
+    vec1 = (np.array(config["initgyrbias"])).astype(np.double)
+    vec2 = (np.array(config["initaccbias"])).astype(np.double)
+    vec3 = (np.array(config["initgyrscale"])).astype(np.double)
+    vec4 = (np.array(config["initaccscale"])).astype(np.double)
+
+    options.initstate.imuerror.gyrbias = np.array([vec1[0], vec1[1], vec1[2]])  * Angle.D2R / 3600.0
+    options.initstate.imuerror.accbias = np.array([vec2[0], vec2[1], vec2[2]]) * 1e-5
+    options.initstate.imuerror.gyrscale = np.array([vec3[0], vec3[1], vec3[2]]) * 1e-6
+    options.initstate.imuerror.accscale = np.array([vec4[0], vec4[1], vec4[2]]) * 1e-6
+
+    # 读取初始位置、速度、姿态(欧拉角)的标准差
+    # load initial position std, velocity std and attitude(euler angle) std
+    vec1 = (np.array(config["initposstd"])).astype(np.double)
+    vec2 = (np.array(config["initvelstd"])).astype(np.double)
+    vec3 = (np.array(config["initattstd"])).astype(np.double)
+
+    options.initstate_std.pos = np.array([vec1[0], vec1[1], vec1[2]])
+    options.initstate_std.vel = np.array([vec2[0], vec2[1], vec2[2]])
+    options.initstate_std.euler = np.array([vec3[0], vec3[1], vec3[2]]) * Angle.D2R
+    
+    # 读取IMU噪声参数
+    # load imu noise parameters
+    vec1 = (np.array(config["imunoise"]["arw"])).astype(np.double)
+    vec2 = (np.array(config["imunoise"]["vrw"])).astype(np.double)
+    vec3 = (np.array(config["imunoise"]["gbstd"])).astype(np.double)
+    vec4 = (np.array(config["imunoise"]["abstd"])).astype(np.double)
+    vec5 = (np.array(config["imunoise"]["gsstd"])).astype(np.double)
+    vec6 = (np.array(config["imunoise"]["asstd"])).astype(np.double)
+
+    options.imunoise.corr_time = (np.array(config["imunoise"]["corrtime"])).astype(np.double)
+    options.imunoise.gyr_arw = np.array([vec1[0], vec1[1], vec1[2]])
+    options.imunoise.acc_vrw = np.array([vec2[0], vec2[1], vec2[2]])
+    options.imunoise.gyrbias_std = np.array([vec3[0], vec3[1], vec3[2]])
+    options.imunoise.accbias_std = np.array([vec4[0], vec4[1], vec4[2]])
+    options.imunoise.gyrscale_std = np.array([vec5[0], vec5[1], vec5[2]])
+    options.imunoise.accscale_std = np.array([vec6[0], vec6[1], vec6[2]])
+    
+    # 读取IMU误差初始标准差,如果配置文件中没有设置，则采用IMU噪声参数中的零偏和比例因子的标准差
+    # Load initial imu bias and scale std, set to bias and scale instability std if load failed
+    try:
+        vec1 = config['initbgstd']
+    except:
+        vec1 = [options.imunoise.gyrbias_std[0], options.imunoise.gyrbias_std[1], options.imunoise.gyrbias_std[2]]
+    
+    try:
+        vec2 = config['initbastd']
+    except:
+        vec2 = [options.imunoise.accbias_std[0], options.imunoise.accbias_std[1], options.imunoise.accbias_std[2]]
+    
+    try:
+        vec3 = config['initsgstd']
+    except:
+        vec3 = [options.imunoise.gyrscale_std[0], options.imunoise.gyrscale_std[1], options.imunoise.gyrscale_std[2]]
+    
+    try:
+        vec4 = config['initsastd']
+    except:
+        vec4 = [options.imunoise.accscale_std[0], options.imunoise.accscale_std[1], options.imunoise.accscale_std[2]]
+    
+    # IMU初始误差转换为标准单位
+    # convert initial IMU errors' units to standard units
+    options.initstate_std.imuerror.gyrbias = np.array([vec1[0], vec1[1], vec1[2]]) * Angle.D2R / 3600.0
+    options.initstate_std.imuerror.accbias = np.array([vec2[0], vec2[1], vec2[2]]) * 1e-5
+    options.initstate_std.imuerror.gyrscale = np.array([vec3[0], vec3[1], vec3[2]]) * 1e-6
+    options.initstate_std.imuerror.accscale = np.array([vec4[0], vec4[1], vec4[2]]) * 1e-6
+
+    # IMU噪声参数转换为标准单位
+    # convert imu noise parameters' units to standard units
+    options.imunoise.gyr_arw *= (Angle.D2R / 60.0)
+    options.imunoise.acc_vrw /= 60.0
+    options.imunoise.gyrbias_std *= (Angle.D2R / 3600.0)
+    options.imunoise.accbias_std *= 1e-5
+    options.imunoise.gyrscale_std *= 1e-6
+    options.imunoise.accscale_std *= 1e-6
+    options.imunoise.corr_time *= 3600
+
+    # GNSS天线杆臂, GNSS天线相位中心在IMU坐标系下位置
+    # gnss antenna leverarm, position of GNSS antenna phase center in IMU frame
+    if("antlever" in config):
+        vec1 = (np.array(config["antlever"])).astype(np.double)
+        options.antlever = vec1
+
+def run(src_dir, config):
+
+    # 参数导入
+    options = GINSOptions()
+    loadConfig(config, options)
+
+    imupath = os.path.abspath(src_dir + config['imupath'])
+    gnsspath = os.path.abspath(src_dir + config['gnsspath'])
+    outputpath = os.path.abspath(src_dir + config['outputpath'])
+    skiprows = int(config["skiprows"])
+    imudatalen = int(config["imudatalen"])
+    imudatarate = int(config["imudatarate"])
+    starttime = float(config["starttime"])  # 可以不用
+    endtime = float(config["endtime"])
+
+    # 加载GNSS文件和IMU文件
+    # load GNSS file and IMU file
+    gnssfile = GnssFileLoader(gnsspath,skiprows,config)
+    imufile = ImuFileLoader(imupath, imudatalen, imudatarate)
+
+    # 配置初始姿态
+    # if options.initstate.euler[0] == 0:
+    #     # acc = imufile.data_[0,4:7] # + np.array([0,0,9.8])
+    #     # pitch = math.degrees(-np.arctan2(acc[0], np.sqrt(acc[1] ** 2 + acc[2] ** 2))) # np.arcsin(ax / magnitude) # 俯仰角 重力算
+    #     # roll = math.degrees(np.arctan2(acc[1], acc[2])) # 横滚
+    #     bearing = calculate_bearing(gnssfile.data_[0,1], gnssfile.data_[0,2],
+    #                                 gnssfile.data_[1,1], gnssfile.data_[1,2])
+    #     options.initstate.euler[2] = bearing # 设置初始航向角
+
+    # 构造GIEngine
+    # Construct GIEngine
+    giengine = GIEngine(options)
+
+    if endtime < 0:
+        endtime = imufile.endtime()
+
+    # if (endtime > 604800 or starttime < imufile.starttime() or starttime > endtime):
+    #     print("Process time ERROR!")
+
+    # 数据对齐, 时间移到定义的开始时间
+    # data alignment
+    starttime = gnssfile.starttime()  # + 100 # 用GNSS的起始时间，不用配置表的
+    imu_cur = IMU()  # IMU类包含IMU当前数据，加速度和角速度 时间等
+    while True:
+        imu_cur = imufile.next()
+        if imu_cur.time >= starttime:
+            break
+
+    gnss = GNSS()  # GNSS类包含GNSS当前数据，经纬高和协方差等，待确定
+    while True:
+        gnss = gnssfile.next()
+        if gnss.time >= starttime:
+            break
+
+    # 添加IMU和GNSS数据到GIEngine中，补偿IMU误差
+    # add imudata and gnssdata to GIEngine, compensate IMU error
+    giengine.addImuData(imu_cur, True)  # 加载新时间的IMU数据，并设置是否补偿
+    giengine.addGnssData(gnss)  # 加载新时间的gnss数据，并设置为可用
+
+    nav_result = np.empty((0, 11))
+    error_result = np.empty((0, 13))
+
+    process_time = time.time()
+
+    f_nav = open(config['outputpath'] + '/KF_GINS_Navresult.nav', 'w')
+    f_err = open(config['outputpath'] + '/KF_GINS_IMU_ERR.txt', 'w')
+
+    # navfile = FileSaver(outputpath + "/KF_GINS_Navresult.nav", nav_columns, FileSaver.TEXT)
+    # imuerrfile = FileSaver(outputpath + "/KF_GINS_IMU_ERR.txt", imuerr_columns, FileSaver.TEXT)
+    # stdfile = FileSaver(outputpath + "/KF_GINS_STD.txt", std_columns, FileSaver.TEXT)
+
+    while True:
+        # 当前IMU状态时间新于GNSS时间时，读取并添加新的GNSS数据到GIEngine
+        # load new gnssdata when current state time is newer than GNSS time and add it to GIEngine
+        if gnss.time < imu_cur.time and not gnssfile.isEof():  # 判断不大于数据长度
+            gnss = gnssfile.next()
+            giengine.addGnssData(gnss)
+
+        # 读取并添加新的IMU数据到GIEngine
+        # load new imudata and add it to GIEngine
+        imu_cur = imufile.next()
+        if imu_cur.time > endtime or imufile.isEof():  # 判断不大于IMU数据长度
+            break
+        giengine.addImuData(imu_cur)
+
+        # 处理新的IMU数据
+        # process new imudata
+        giengine.newImuProcess()
+
+        timestamp = giengine.timestamp()
+        navstate = giengine.getNavState()
+        imuerr = navstate.imuerror
+        # cov       = giengine.getCovariance()
+
+        result1 = np.array([
+            np.round(0, 9),  # 保留9位小数
+            np.round(timestamp, 9),
+            np.round(navstate.pos[0] * Angle.R2D, 9),
+            np.round(navstate.pos[1] * Angle.R2D, 9),
+            np.round(navstate.pos[2], 9),
+            np.round(navstate.vel[0], 9),
+            np.round(navstate.vel[1], 9),
+            np.round(navstate.vel[2], 9),
+            np.round(navstate.euler[0] * Angle.R2D, 9),
+            np.round(navstate.euler[1] * Angle.R2D, 9),
+            np.round(navstate.euler[2] * Angle.R2D, 9)])
+
+        result2 = np.array([
+            np.round(timestamp, 9),
+            np.round(imuerr.gyrbias[0] * Angle.R2D * 3600, 9),
+            np.round(imuerr.gyrbias[1] * Angle.R2D * 3600, 9),
+            np.round(imuerr.gyrbias[2] * Angle.R2D * 3600, 9),
+            np.round(imuerr.accbias[0] * 1e5, 9),
+            np.round(imuerr.accbias[1] * 1e5, 9),
+            np.round(imuerr.accbias[2] * 1e5, 9),
+            np.round(imuerr.gyrscale[0] * 1e6, 9),
+            np.round(imuerr.gyrscale[1] * 1e6, 9),
+            np.round(imuerr.gyrscale[2] * 1e6, 9),
+            np.round(imuerr.accscale[0] * 1e6, 9),
+            np.round(imuerr.accscale[1] * 1e6, 9),
+            np.round(imuerr.accscale[2] * 1e6, 9)])
+
+        np.savetxt(f_nav, [result1], delimiter=" ", fmt="%.9f")  # 列分隔符为空格,保留9位小数
+        np.savetxt(f_err, [result2], delimiter=" ", fmt="%.9f")
+
+        progress = (timestamp - starttime) / (endtime - starttime) * 100.0
+        sys.stdout.write('\r[{:.2f}%]'.format(progress) + str(timestamp))  # 创建动态进度显示
+        sys.stdout.flush()
+
+    f_nav.close()
+    f_err.close()
+
+    dataset_path = f'dataset_SZ/{Dataset}'
+    navresult_filepath = config['outputpath'] + '/KF_GINS_Navresult.nav'
+    refresult_filepath = f'../{dataset_path}/{config["refname"]}'
+    # 导航结果
+    nav_pos_err = calcNavresultError(navresult_filepath, refresult_filepath,config)
+
+    return nav_pos_err
+
+def objective(trial):
+    ## 噪声参数
+    arw = trial.suggest_float("arw", 0.1, 100, log=True)
+    config["imunoise"]["arw"] = [arw, arw, arw]
+    vrw = trial.suggest_float("vrw", 0.001, 100, log=True)
+    config["imunoise"]["vrw"] = [vrw, vrw, vrw]
+    ## 线性采样处理较窄范围的参数
+    gbstd = trial.suggest_float("gbstd", 0.1, 20, step=0.05)
+    config["imunoise"]["gbstd"] = [gbstd, gbstd, gbstd]
+    abstd = trial.suggest_float("abstd", 1, 500, log=True)
+    config["imunoise"]["abstd"] = [abstd, abstd, abstd]
+
+    # 初始化参数
+    # initposstd = trial.suggest_float("initposstd", 0.3, 30, log=True)
+    # config["initposstd"] = [initposstd,initposstd,initposstd]
+    # initvelstd = trial.suggest_float("initvelstd", 0.1, 10, log=True)
+    # config["initvelstd"] = [initvelstd,initvelstd,initvelstd]
+    # initattstd = trial.suggest_float("initattstd", 0.005, 0.04)
+    # config["initattstd"] = [initattstd,initattstd,initattstd]
+
+    # 零偏参数
+    # gsstd = trial.suggest_float("gsstd", 200, 500, step=10)
+    # config["imunoise"]["gsstd"] = [gsstd, gsstd, gsstd]
+    # asstd = trial.suggest_float("asstd", 200, 500, step=10)
+    # config["imunoise"]["asstd"] = [asstd, asstd, asstd]
+    # corrtime = trial.suggest_float("corrtime", 0.9, 3)
+    # config["imunoise"]["corrtime"] = corrtime
+
+    # 杆臂
+    antlever_x = trial.suggest_float("antlever_x", -1, 1)
+    antlever_y = trial.suggest_float("antlever_y", -1, 1)
+    antlever_z = trial.suggest_float("antlever_z", -3, -1)
+    config["antlever"] = [antlever_x,antlever_y,antlever_z]
+    config["GTlever"] = [antlever_x,antlever_y,antlever_z]
+
+    # 2. 运行你的算法
+    # 假设你有一个函数执行定位并返回位置误差 RMS
+    ll_error = run(src_dir, config)
+
+    # 3. 返回误差，Optuna 会尝试将其最小化
+    return ll_error
+
+if __name__ == "__main__":
+    """
+    可选：东京：Tokyo_Data_Odaiba Tokyo_Data_Shinjuku 
+    香港新：1_UrbanNav-HK-Medium-Urban-1 2_UrbanNav-HK-Deep-Urban-1 3_UrbanNav-HK-Harsh-Urban-1
+    香港旧：UrbanNav-HK-Data20190428 (IMU数据有点问题)
+    """
+    Dataset = 'SZ-20240729-1606-1716'
+    Equip = 'RTK'
+    parser = argparse.ArgumentParser(description='KF-GINS')  # 初始化解释器
+    parser.add_argument('--conf', type=str, help='configuration file path')  # 定义了一个可选的文件路径参数
+    args = parser.parse_args()
+    dataset_path = f'dataset_SZ/{Dataset}'
+    print("\033[1m" + "KF-GINS: An EKF-Based GNSS/INS Integrated Navigation System\n" + "\033[0m")
+
+    src_dir += '/'
+    try:
+        filename = None
+        if args.conf is None:
+            filename = os.path.abspath(src_dir + f'./{dataset_path}/{Equip}/kf-gins.yaml')
+        else:
+            filename = args.conf
+        with open(filename, 'r', encoding='utf-8') as f:
+            config = yaml.load(f, Loader=yaml.FullLoader)  # 从YAML文件(filename)中加载配置数据
+    except Exception as e:
+        print(f"Error details: {str(e)}")
+        raise Exception(
+            "Failed to read configuration file. Please check the path and format of the configuration file!")
+
+    study = optuna.create_study(direction="minimize")
+    study.optimize(objective, n_trials=70)  # 跑N组实验
+    print("最优参数: ", study.best_params)
+    df = study.trials_dataframe()
+    # 保存为 CSV
+    df.to_csv(config['outputpath'] + "/optimization_results_SZ.csv", index=False, encoding='utf-8-sig')
+    vis.plot_optimization_history(study).show()

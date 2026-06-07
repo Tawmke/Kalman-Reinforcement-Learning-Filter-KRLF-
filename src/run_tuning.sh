@@ -1,0 +1,1 @@
+nohup /mnt/sdb/home/tangjh/anaconda3/envs/deep_gnss/bin/python3 -u /mnt/sdb/home/tangjh/KF-GINS-Py-main/src/rl_control_KRLfilter_custom_Dagent_tuning.py > /mnt/sdb/home/tangjh/KF-GINS-Py-main/records_values/tuning0530.out

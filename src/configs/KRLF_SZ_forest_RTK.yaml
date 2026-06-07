@@ -1,0 +1,76 @@
+# KRLF configuration file
+
+system:
+  gpu_id: "2"
+
+training_settings:
+  training_stepnum: 30000 # 30000
+  learning_rate: 0.00020950174482457767
+  triptype: 'SZ_forest_RTK' # 训练类型: HK_De_ublox HK_Me_ublox HK_Ha_ublox
+  running_date: 'testing' # 设置保存路径 finetuning_4_testing_velatt_0407 tuning_4_testing_indomain
+  networkmod: 'continuous_lstmATF1'
+  alltraj: True # use all traj data for training and testing
+  traj_record: False # 是否保存轨迹
+  traj_type_target_train: [ 0, 0.7 ]  # 轨迹数据的比例
+  traj_type_target_test: [ 0.7, 1 ]
+
+testing_settings:
+  onlytesting: False # 只测试不训练
+  Twoagent_testing: False # 双智能体测试
+  testdate: 'tuning_4_testing_indomain'
+  model_basefolder: 'HK_De_ublox_0.7_1_RMSEadv_ratio'
+  model_name_list: ['lr=0.00_pos=5_SP=2.88_PC=0.00_reset=3_buffer=128_vf_coef=0.50']
+  # 微调参数
+  kf_coef: 0.5
+
+env_para:
+#  envmode:
+#  1. InHiGNSSSatCov_PreCovPos: 输入：新息 历史差分 GNSS 状态 RLf，输出：位置增量，协方差
+  envmod: 'InHiGNSSSatCov_PreCovPos'
+  conv_mode: 'Tuning' # Tuning Pred
+  trajdata_sort: 'sorted' # 是否乱序
+  postraj_num: 6 # 窗口步数
+  baseline_mod : 'GNSS/INS' # baseline方法 GNSS/INS GNSS
+  cord: 'NED' # LLH NED 动作操作的位置增量
+  RL_reset_step: 1
+  prdcov_mode: 'Scale_mode1' # Add_mode1 Add_mode2 Scale_mode1
+   # 连续动作设置（根据环境不一样，参数会不同）
+  continuous_actionspace: [-100,100]
+  continuous_scale_state_pred: 1.0498496084549606 # 位置预测的动作尺度
+  continuous_scale_vel_pred: 1.0e-2 # 速度预测的动作尺度
+  continuous_scale_att_pred: 1.0e-2 # 姿态预测的动作尺度
+  continuous_scale_policy_cov: 0.0019731979515624836 # RL协方差估计的动作尺度
+  # 初始化设置
+  initial_RLcov: 9.497609657871974
+  magnitude: 0.5
+  # 奖励设置： RMSEadv_tanh RMSEratio_log RMSEratio_tanh RMSEadv RMSEadv_log RMSEadv_ratio
+  reward_setting: 'RMSEadv_ratio'
+  pos_weight: 10
+  # discrete action settings （基本不用）
+  discrete_actionspace: 7
+  action_scale: 3e-1 # scale in meters
+
+model_para:
+  networkmod: 'continuous_lstmATF1'
+  net_archppo: [64, 64]
+  ent_coef: 0.059612708084198295 # 策略熵损失，增加探索
+  vf_coef: 0.2167440119854488 # critic学不出来，可以调大
+  n_steps: 64 # reply buffer的大小, 增大可以提高稳定性，减小方差
+  batch_size: 64 # 每次训练取样本
+  clip_range: 0.0703096757712699
+  clip_range_vf: None
+  n_epochs: 10 # 训练epoch
+
+testing_dataset_setting:
+  'SZ_canyon_RTK': ['SZ_canyon_RTK','SZ_overpass_RTK','SZ_openroad_RTK','SZ_forest_RTK']
+  'SZ_overpass_RTK': ['SZ_canyon_RTK']
+  'SZ_openroad_RTK': ['SZ_canyon_RTK']
+  'SZ_forest_RTK': ['SZ_canyon_RTK']
+
+#                    record_columns=['UnixTimeMillis_ref', ' Latitude (deg)', ' Longitude (deg)', ' Ellipsoid Height (m)',
+#                  ' Velocity X (m/s)', ' Velocity Y (m/s)', ' Velocity Z (m/s)',
+#                  ' Roll (deg)', ' Pitch (deg)', ' Heading (deg)',' Latitude_GT (deg)', ' Longitude_GT (deg)', ' Ellipsoid Height_GT (m)',
+#                  ' Velocity X_GT (m/s)', ' Velocity Y_GT (m/s)', ' Velocity Z_GT (m/s)',
+#                  ' Roll_GT (deg)', ' Pitch_GT (deg)', ' Heading_GT (deg)', 'Latitude_RLpredict', 'Longitude_RLpredict', 'Ellipsoid Height_RLpredict',
+#                  'Velocity_X_RLpredict', 'Velocity_Y_RLpredict', 'Velocity_Z_RLpredict',
+#                  'Roll_RLpredict', 'Pitch_RLpredict', 'Heading_RLpredict']
