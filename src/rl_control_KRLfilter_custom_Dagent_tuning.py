@@ -8,7 +8,7 @@ sys.path.append(src_dir)
 import multiprocessing
 from stable_baselines3.common.utils import get_schedule_fn
 from env.SZdata_GNSSINS_KRLF_split_boost import * # RL环境
-from env.Urbannav_GNSSINS_KRLF_boost import DA_PrePosCov_PosAttCorrectCov_InHiGNSSSatCov # RL环境
+from env.Urbannav_GNSSINS_KRLF_simple import DA_PrePosCov_PosAttCorrectCov_InHiGNSSSatCov # RL环境
 from env.env_param import trip_type_maping as trip_type_maping_HK
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3 import A2C
