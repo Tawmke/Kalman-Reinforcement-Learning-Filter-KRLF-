@@ -3,11 +3,6 @@ author: Jianhao Tang
   - "2025-05-22: Jianhao Tang  初始文档创建"
 ---
 
-# Python版本KF-GINS 实现 KRLF算法（更新中）
-
-## 前提说明
-***实验室资料使用严禁外传！！***
-
 ## 简介
 
 
