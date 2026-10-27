@@ -50,5 +50,5 @@ triptype_traning = 'HK_De_ublox_Dagent'
 3. 通过修改`objective`函数里各参数的范围可以设置不同参数的搜索范围。
 
 ### 1.5 数据处理
-1. 运行代码[kf_gins_data_processing.py](./src/kf_gins_data_processing.py)分别进行香港数据集的打包处理。
+1. 运行代码[kf_gins_data_processing.py](./src/kf_gins_data_processing.py)进行香港数据集的打包处理，原始数据集下载：https://github.com/IPNL-POLYU/UrbanNavDataset
 2. 如果项目已提供`env/`环境中已处理好的pkl和csv文件，则不需要再重新运行，如有需要可自己再处理
