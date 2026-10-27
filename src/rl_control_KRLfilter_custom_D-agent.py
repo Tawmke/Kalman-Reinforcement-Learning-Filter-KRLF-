@@ -6,7 +6,7 @@ cur_dir = os.path.dirname(os.path.abspath(__file__))
 src_dir = os.path.join(cur_dir, '..')
 sys.path.append(src_dir)
 from stable_baselines3.common.utils import get_schedule_fn
-from env.Urbannav_GNSSINS_KRLF_boost import * # RL环境
+from env.Urbannav_GNSSINS_KRLF_simple import * # RL环境
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3 import A2C
 from model.ppo_recurrent_D_agent import RecurrentPPO
@@ -22,7 +22,7 @@ import yaml
 """
 
 if __name__ == "__main__":
-    # 可选环境：'HK_Me_ublox_Dagent'
+    # 可选环境：'HK_Me_ublox_Dagent' 'HK_De_ublox_Dagent'
     triptype = 'HK_De_ublox_Dagent'
     print(f"-----Env mode: {triptype}-------")
     conf_name = f'KRLF_{triptype}.yaml'
@@ -164,7 +164,7 @@ if __name__ == "__main__":
             if testtype == triptype:
                 traj_type = traj_type_target_test  # 独立同分布测试
             else:
-                traj_type = [0, 1]  # 域外分布测试范围
+                traj_type = traj_type_target_test # [0, 1]  # 域外分布测试范围
 
             test_trajlist = range(more_test_trajrange[0],more_test_trajrange[-1]+1) # range(more_test_trajrange[0],more_test_trajrange[-1]+1)#[0,1,2,3,4,5]
             for test_traj in test_trajlist:
@@ -207,9 +207,19 @@ if __name__ == "__main__":
 
     elif config["testing_settings"]['onlytesting']:
         print(f"----------Only testing for {triptype} setting---------")
+        start_folder = config.get("testing_settings", {}).get("start_folder")
+        start_testing = (start_folder is None)
         for model_folder in model_folderlist:
-            if config["finetuning_settings"]['finetuning']:
-                break
+            # 从特定文件夹开始
+            if not start_testing:
+                if model_folder == start_folder:
+                    start_testing = True  # 找到了，开启测试开关
+                else:
+                    continue
+
+            if "finetuning_settings" in config:
+                if config["finetuning_settings"]['finetuning']:
+                    break
             model_sepfolderlist=os.listdir(f'{model_basefolder}/{model_folder}') # PPO_1
             model_sepfolderlist.sort()
 
@@ -296,7 +306,7 @@ if __name__ == "__main__":
                         if testtype == triptype:
                             traj_type = traj_type_target_test  # 独立同分布测试
                         else:
-                            traj_type = [0, 1]  # 域外分布测试范围
+                            traj_type = traj_type_target_test # [0, 1]  # 域外分布测试范围
 
                         test_trajlist = range(more_test_trajrange[0],more_test_trajrange[-1]+1)  # range(more_test_trajrange[0],more_test_trajrange[-1]+1)#[0,1,2,3,4,5]
                         for test_traj in test_trajlist:
@@ -506,7 +516,7 @@ if __name__ == "__main__":
                         if testtype == triptype:
                             traj_type = traj_type_target_test  # 独立同分布测试
                         else:
-                            traj_type = [0, 1]  # 域外分布测试范围
+                            traj_type = traj_type_target_test # [0, 1]   # 域外分布测试范围
 
                         test_trajlist = range(more_test_trajrange[0],more_test_trajrange[-1]+1)  # range(more_test_trajrange[0],more_test_trajrange[-1]+1)#[0,1,2,3,4,5]
                         for test_traj in test_trajlist:
