@@ -26,7 +26,7 @@ project-root/
 ## 1. 使用说明
 
 ### 1.1 安装依赖
-本项目使用的环境要求不高，可使用[environment.yml](environment.yml)进行一步到位的配置（可能会有一些多余的库），或者根据缺失的包一步一步进行配置，或者参考服务器85中dingweizu文件夹的环境配置。需要注意，stable_baseline3的版本只能是1.6.2，python版本为3.8.10。
+本项目使用的环境要求不高，可使用[environment.yml](environment.yml)进行一步到位的配置（可能会有一些多余的库），或者根据缺失的包一步一步进行配置。需要注意，stable_baseline3的版本只能是1.6.2，python版本为3.8.10。
 
 ### 1.2 快速开始
 1. 运行代码[rl_control_KRLfilter_custom_D-agent.py](./src/rl_control_KRLfilter_custom_D-agent.py)进行香港数据集的实验，通过修改`triptype_traning`参数可以切换对应实验的训练环境。
