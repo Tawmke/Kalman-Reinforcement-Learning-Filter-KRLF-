@@ -1,7 +1,3 @@
----
-author: Jianhao Tang
-  - "2025-05-22: Jianhao Tang  初始文档创建"
----
 
 ## 简介
 
